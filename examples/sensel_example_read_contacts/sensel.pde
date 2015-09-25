@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **************************************************************************/
+
 /* 
   Sensel API for Processing.
 
@@ -39,14 +40,14 @@ public class SenselContact
 {
   int total_force;
   int uid;
-  float area; // Divide by 16 to get an estimate of area
-  float x_pos_mm;                                                                                                                                                                
-  float y_pos_mm;                                                                                                                                                                
+  float area_mm_sq; // area in square mm
+  float x_pos_mm; // x position in mm                                                                                                                                         
+  float y_pos_mm; // y position in mm                                                                                                                                           
   float dx_mm; // change in x from last frame                                                                                                                                                                     
   float dy_mm; // change in y from last frame                                                                                                                                                                     
-  int orientation; // angle from -90 to 90 multiplied by 256                                                                                                                                                 
-  int major_axis; // length of the major axis multiplied by 256                                                                                                                                             
-  int minor_axis; // length of the minor axis multiplied by 256                                                                                                                                             
+  float orientation_degrees; // angle from -90 to 90 degrees                                                                                                                          
+  float major_axis_mm; // length of the major axis                                                                                                                                             
+  float minor_axis_mm; // length of the minor axis                                                                                                                                             
   int id;
   int type;
 }
@@ -87,6 +88,8 @@ public class SenselDevice
   private int sensor_max_contacts;
   private float sensor_x_to_mm_factor;
   private float sensor_y_to_mm_factor;
+  private float sensor_orientation_to_degrees_factor = 1.0f/256.0f;
+  private float sensor_area_to_mm_sq_factor = 1.0f/4096.0f;
   private PApplet parent;
 
   public SenselDevice(PApplet p)
@@ -409,8 +412,8 @@ public class SenselDevice
         c[i] = new SenselContact();
         c[i].total_force = _convertBytesTo32(contact_frame[++idx], contact_frame[++idx], contact_frame[++idx], contact_frame[++idx]);
         c[i].uid = _convertBytesTo32(contact_frame[++idx], contact_frame[++idx], contact_frame[++idx], contact_frame[++idx]);
-        //Divide by 16 to get a better estimate for area
-        c[i].area = ((float)_convertBytesTo32(contact_frame[++idx], contact_frame[++idx], contact_frame[++idx], contact_frame[++idx])) / 16.0;
+        //Convert area to square mm
+        c[i].area_mm_sq = ((float)_convertBytesTo32(contact_frame[++idx], contact_frame[++idx], contact_frame[++idx], contact_frame[++idx])) * sensor_area_to_mm_sq_factor;
         //Convert x_pos to x_pos_mm
         c[i].x_pos_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
         //Convert y_pos to y_pos_mm
@@ -419,11 +422,12 @@ public class SenselDevice
         c[i].dx_mm =    ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
         //Convert dy to dy_mm
         c[i].dy_mm =    ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_y_to_mm_factor;
-        
-        //TODO: Change orientation to signed byte
-        c[i].orientation = _convertBytesTo16(contact_frame[++idx], contact_frame[++idx]);
-        c[i].major_axis = _convertBytesTo16(contact_frame[++idx], contact_frame[++idx]);
-        c[i].minor_axis = _convertBytesTo16(contact_frame[++idx], contact_frame[++idx]);
+        //Convert orientation to angle in degrees
+        c[i].orientation_degrees = ((float)_convertBytesToS16(contact_frame[++idx], contact_frame[++idx])) * sensor_orientation_to_degrees_factor;
+        //Convert major_axis to mm (assumes that x_to_mm and y_to_mm are the same)
+        c[i].major_axis_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
+        //Convert minor_axis to mm (assumes that x_to_mm and y_to_mm are the same)
+        c[i].minor_axis_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
         ++idx; //peak_x
         ++idx; //peak_y
         c[i].id = (((int)contact_frame[++idx]) & 0xff);

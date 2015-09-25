@@ -75,12 +75,22 @@ void draw()
   {
     int force = c[i].total_force;
     
+    float area = c[i].area_mm_sq;
+    
     float sensor_x_mm = c[i].x_pos_mm;
     float sensor_y_mm = c[i].y_pos_mm;
     
-    int screen_x = (int) (c[i].x_pos_mm / sensel.getSensorWidthMM()  * WINDOW_WIDTH_PX);
-    int screen_y = (int) (c[i].y_pos_mm / sensel.getSensorHeightMM() * WINDOW_HEIGHT_PX);
+    int screen_x = (int) ((sensor_x_mm / sensel.getSensorWidthMM())  * WINDOW_WIDTH_PX);
+    int screen_y = (int) ((sensor_y_mm / sensel.getSensorHeightMM()) * WINDOW_HEIGHT_PX);
     
+    float orientation = c[i].orientation_degrees;
+    float major = c[i].major_axis_mm;
+    float minor = c[i].minor_axis_mm;
+    
+    // NOTE: This assumes window is scaled similar to sensor:
+    int screen_major = (int) ((major / sensel.getSensorWidthMM())  * WINDOW_WIDTH_PX);
+    int screen_minor = (int) ((minor / sensel.getSensorWidthMM())  * WINDOW_WIDTH_PX);
+   
     int id = c[i].id;
     int event_type = c[i].type;
     
@@ -103,13 +113,33 @@ void draw()
         event = "error";
     }
     
-    println("Contact ID " + id + ", event=" + event + ", mm coord: (" + sensor_x_mm + ", " + sensor_y_mm + "), force=" + force); 
+    println("Contact ID " + id + ", event=" + event + ", mm coord: (" + sensor_x_mm + ", " + sensor_y_mm + "), shape: (" + orientation + ", " + major + ", " + minor + "), area=" + area + ", force=" + force); 
 
-    int size = force / 100;
-    if(size < 10) size = 10;
-    
-    ellipse(screen_x, screen_y, size, size);
-    
+    if(true) // Set to false to just draw circles
+    {
+      float scale = (float)force / 10000.0f;
+      if(scale > 1.0f) scale = 1.0f;
+
+      color from = color(0, 102, 153);
+      color to = color(204, 102, 0);
+      color clr = lerpColor(from, to, scale);
+
+      pushMatrix();
+      translate( screen_x, screen_y );
+      rotate( radians(orientation) );
+
+      stroke(255);
+      fill(clr);
+      ellipse( 0, 0, screen_minor, screen_major);
+      popMatrix();
+    }
+    else
+    {
+      int size = force / 100;
+      if(size < 10) size = 10;      
+      
+      ellipse(screen_x, screen_y, size, size);
+    }
   }
   if(c.length > 0)
     println("****");

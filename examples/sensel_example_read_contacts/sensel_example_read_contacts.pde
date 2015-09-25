@@ -61,8 +61,13 @@ void draw()
   for(int i = 0; i < c.length; i++)
   {
     int force = c[i].total_force;
+    float area = c[i].area_mm_sq;
     float sensor_x_mm = c[i].x_pos_mm;
     float sensor_y_mm = c[i].y_pos_mm;
+    
+    float orientation = c[i].orientation_degrees;
+    float major = c[i].major_axis_mm;
+    float minor = c[i].minor_axis_mm;    
     
     int id = c[i].id;
     int event_type = c[i].type;
@@ -86,7 +91,7 @@ void draw()
         event = "error";
     }
     
-    println("Contact ID " + id + ", event=" + event + ", mm coord: (" + sensor_x_mm + ", " + sensor_y_mm + "), force=" + force); 
+    println("Contact ID " + id + ", event=" + event + ", mm coord: (" + sensor_x_mm + ", " + sensor_y_mm + "), shape: (" + orientation + ", " + major + ", " + minor + "), area=" + area + ", force=" + force); 
   }
   
   if(false) // Set to true to see accelerometer data

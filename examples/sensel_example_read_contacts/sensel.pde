@@ -220,6 +220,7 @@ public class SenselDevice
   
   public void closeConnection()
   {
+    setLEDBrightnessAll((byte)0);
     serial_port.stop();
   }
   
@@ -231,6 +232,12 @@ public class SenselDevice
   public void setLEDBrightness(int idx, byte brightness)
   {
     senselWriteReg(SENSEL_REG_LED_BRIGHTNESS + idx, 1, brightness); 
+  }
+  
+  public void setLEDBrightnessAll(byte brightness)
+  {
+    for(int i = 0; i < 16; i++)
+      senselWriteReg(SENSEL_REG_LED_BRIGHTNESS + i, 1, brightness); 
   }
   
   public float getSensorWidthMM()

@@ -79,12 +79,14 @@ void draw()
         event = "invalid"; 
         break;
       case SenselDevice.SENSEL_EVENT_CONTACT_START:
+        sensel.setLEDBrightness(id, (byte)100); //turn on LED
         event = "start";   
         break;
       case SenselDevice.SENSEL_EVENT_CONTACT_MOVE:
         event = "move";
         break;
       case SenselDevice.SENSEL_EVENT_CONTACT_END:
+        sensel.setLEDBrightness(id, (byte)0);
         event = "end";
         break;
       default:

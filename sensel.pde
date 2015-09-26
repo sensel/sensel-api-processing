@@ -231,7 +231,8 @@ public class SenselDevice
   
   public void setLEDBrightness(int idx, byte brightness)
   {
-    senselWriteReg(SENSEL_REG_LED_BRIGHTNESS + idx, 1, brightness); 
+    if(idx < 16)
+      senselWriteReg(SENSEL_REG_LED_BRIGHTNESS + idx, 1, brightness); 
   }
   
   public void setLEDBrightnessAll(byte brightness)

@@ -73,7 +73,7 @@ void draw()
    
   for(int i = 0; i < c.length; i++)
   {
-    int force = c[i].total_force;
+    float force = c[i].total_force;
     
     float area = c[i].area_mm_sq;
     
@@ -137,7 +137,7 @@ void draw()
     }
     else
     {
-      int size = force / 100;
+      float size = force / 100.0f;
       if(size < 10) size = 10;      
       
       ellipse(screen_x, screen_y, size, size);

@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2015 Sensel, Inc.
+ * Copyright 2017 Sensel, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,25 +37,24 @@
 import processing.serial.*;
 
 public class SenselContact
-{
-  int total_force;
-  int uid;
-  float area_mm_sq; // area in square mm
-  float x_pos_mm; // x position in mm                                                                                                                                         
-  float y_pos_mm; // y position in mm                                                                                                                                           
-  float dx_mm; // change in x from last frame                                                                                                                                                                     
-  float dy_mm; // change in y from last frame                                                                                                                                                                     
-  float orientation_degrees; // angle from -90 to 90 degrees                                                                                                                          
-  float major_axis_mm; // length of the major axis                                                                                                                                             
-  float minor_axis_mm; // length of the minor axis                                                                                                                                             
+{                                                                                                                                            
   int id;
   int type;
+  float x_pos_mm; // x position in mm                                                                                                                                         
+  float y_pos_mm; // y position in mm    
+  float total_force;
+  float area_mm_sq; // area in square mm                                                                                                                                                                         
+  float orientation_degrees; // angle from -90 to 90 degrees                                                                                                                          
+  float major_axis_mm; // length of the major axis                                                                                                                                             
+  float minor_axis_mm; // length of the minor axis 
 }
 
 public class SenselDevice
 {
-  final static byte SENSEL_REG_MAGIC                = (byte)0x00;
-  final static byte SENSEL_REG_MAGIC_LENGTH         = (byte)0x06;
+  final static byte SENSEL_REG_MAGIC                          = (byte)0x00;
+  final static byte SENSEL_REG_MAGIC_LENGTH                   = (byte)0x06;
+  final static byte SENSEL_REG_SENSOR_ACTIVE_AREA_WIDTH_UM    = (byte)0x14;
+  final static byte SENSEL_REG_SENSOR_ACTIVE_AREA_HEIGHT_UM   = (byte)0x18;
   final static byte SENSEL_REG_SCAN_CONTENT_CONTROL = (byte)0x24;
   final static byte SENSEL_REG_SCAN_ENABLED         = (byte)0x25;
   final static byte SENSEL_REG_SCAN_READ_FRAME      = (byte)0x26;
@@ -67,9 +66,9 @@ public class SenselDevice
 
   final static byte SENSEL_FRAME_CONTACTS_FLAG      = (byte)0x04;
 
-  final static byte SENSEL_PT_FRAME     = 1;
-  final static byte SENSEL_PT_READ_ACK  = 6;
-  final static byte SENSEL_PT_WRITE_ACK = 10;
+  final static byte SENSEL_PT_READ_ACK  = 1;
+  final static byte SENSEL_PT_RVS_ACK   = 3;
+  final static byte SENSEL_PT_WRITE_ACK = 5;
 
   final static int SENSEL_EVENT_CONTACT_INVALID = 0;
   final static int SENSEL_EVENT_CONTACT_START   = 1;
@@ -81,15 +80,12 @@ public class SenselDevice
   final static byte SENSEL_WRITE_HEADER = SENSEL_BOARD_ADDR;
 
   private Serial serial_port;
-  private int sensor_max_x;
-  private int sensor_max_y;
   private float sensor_width_mm;
   private float sensor_height_mm;
   private int sensor_max_contacts;
-  private float sensor_x_to_mm_factor;
-  private float sensor_y_to_mm_factor;
-  private float sensor_orientation_to_degrees_factor = 1.0f/256.0f;
-  private float sensor_area_to_mm_sq_factor = 1.0f/4096.0f;
+  private float sensor_mm_value_scale = 256.0f;
+  private float sensor_gram_value_scale = 8.0f;
+  private float sensor_degree_value_scale = 16.0f;
   private PApplet parent;
 
   public SenselDevice(PApplet p)
@@ -106,7 +102,7 @@ public class SenselDevice
     delay(500);
     
     //1-byte packet type, 2-byte size of payload, Payload, 1-byte checksum
-    int magic_response_size = 4 + SENSEL_REG_MAGIC_LENGTH;
+    int magic_response_size = 5 + SENSEL_REG_MAGIC_LENGTH;
     
     if(port.available() < magic_response_size)
     {
@@ -120,6 +116,13 @@ public class SenselDevice
       if(port.readChar() != SENSEL_PT_READ_ACK) //Packet ACK
       {
         println("READ ACK NOT FOUND IN MAGIC PACKET!");
+        return false;
+      }
+      
+      //Check Reg
+      if(port.readChar() != SENSEL_REG_MAGIC) //Packet ACK
+      {
+        println("READ REG NOT FOUND IN MAGIC PACKET!");
         return false;
       }
 
@@ -186,11 +189,6 @@ public class SenselDevice
       if(_checkForMagic(curr_port))
       {
         serial_port = curr_port;
-        sensor_max_x =  (256 * (_readReg(0x10, 1)[0] - 1));
-        sensor_max_y =  (256 * (_readReg(0x11, 1)[0] - 1));
-        
-        println("Sensor Max X = " + sensor_max_x);
-        println("Sensor Max Y = " + sensor_max_y);
         
         int [] sensor_width_arr  = _readReg(0x14, 4);
         int [] sensor_height_arr = _readReg(0x18, 4);
@@ -204,10 +202,6 @@ public class SenselDevice
         
         sensor_max_contacts = _readReg(SENSEL_REG_CONTACTS_MAX_COUNT, 1)[0];
         println("Sensor Max Contacts = " + sensor_max_contacts);
-        
-        sensor_x_to_mm_factor = sensor_width_mm  / sensor_max_x;
-        sensor_y_to_mm_factor = sensor_height_mm / sensor_max_y;
-        
         break;
       }
       else
@@ -280,6 +274,12 @@ public class SenselDevice
     if(ack != SENSEL_PT_READ_ACK)
       println("FAILED TO RECEIVE ACK ON READ (regaddr=" + addr + ", ack=" + ack + ")");
     
+    int reg;
+    while((reg = serial_port.read()) == -1);
+    
+    if(reg != addr)
+      println("FAILED TO RECEIVE REG ON READ (regaddr=" + addr + ", readreg=" + reg + ")");
+    
     int size0;
     while((size0 = serial_port.read()) == -1);
   
@@ -321,9 +321,21 @@ public class SenselDevice
     int ack;
     while((ack = serial_port.read()) == -1);
     
-    if(ack != SENSEL_PT_FRAME)
-      println("FAILED TO RECEIVE FRAME PACKET TYPE ON FRAME READ");
+    if(ack != SENSEL_PT_RVS_ACK)
+      println("FAILED TO RECEIVE FRAME ACK ON FRAME READ");
     
+    int reg;
+    while((reg = serial_port.read()) == -1);
+    
+    if(reg != SENSEL_REG_SCAN_READ_FRAME)
+      println("FAILED TO RECEIVE FRAME REG ON FRAME READ");
+      
+    int header;
+    while((header = serial_port.read()) == -1);
+    
+    if(header != 0)
+      println("FAILED TO RECEIVE FRAME HEADER ON FRAME READ");
+      
     int size0;
     while((size0 = serial_port.read()) == -1);
   
@@ -336,11 +348,17 @@ public class SenselDevice
     
     int frame_counter;
     while((frame_counter = serial_port.read()) == -1);
+    
+    serial_port.read(); //Time
+    serial_port.read();
+    serial_port.read();
+    serial_port.read();
+    serial_port.read(); //Contacts content
     //println("FC: " + frame_counter);
     
     //println("Finished reading contact frame size: " + (size0 | (size1 <<8)));  
     
-    return _convertBytesTo16((byte)size0, (byte)size1) - 2; //Packet size includes content bitmask and lost frame count which we've already read out
+    return _convertBytesTo16((byte)size0, (byte)size1) - 7; //Packet size includes content bitmask and lost frame count which we've already read out
   }
   
   //We only support single-byte writes at this time TODO: Implement multi-byte write
@@ -360,6 +378,12 @@ public class SenselDevice
     
     if(ack != SENSEL_PT_WRITE_ACK)
       println("FAILED TO RECEIVE ACK ON WRITE (regaddr=" + addr + ", ack=" + ack + ")");
+      
+    int reg;
+    while((reg = serial_port.read()) == -1);
+    
+    if((byte)reg != (byte)addr)
+      println("FAILED TO RECEIVE REG ON WRITE (regaddr=" + addr + ", readReg=" + reg + ")");
   }
   
   private int _convertBytesTo32(byte b0, byte b1, byte b2, byte b3)
@@ -418,28 +442,20 @@ public class SenselDevice
       for(int i = 0; i < num_contacts; i++)
       {
         c[i] = new SenselContact();
-        c[i].total_force = _convertBytesTo32(contact_frame[++idx], contact_frame[++idx], contact_frame[++idx], contact_frame[++idx]);
-        c[i].uid = _convertBytesTo32(contact_frame[++idx], contact_frame[++idx], contact_frame[++idx], contact_frame[++idx]);
-        //Convert area to square mm
-        c[i].area_mm_sq = ((float)_convertBytesTo32(contact_frame[++idx], contact_frame[++idx], contact_frame[++idx], contact_frame[++idx])) * sensor_area_to_mm_sq_factor;
-        //Convert x_pos to x_pos_mm
-        c[i].x_pos_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
-        //Convert y_pos to y_pos_mm
-        c[i].y_pos_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_y_to_mm_factor;
-        //Convert dx to dx_mm
-        c[i].dx_mm =    ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
-        //Convert dy to dy_mm
-        c[i].dy_mm =    ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_y_to_mm_factor;
-        //Convert orientation to angle in degrees
-        c[i].orientation_degrees = ((float)_convertBytesToS16(contact_frame[++idx], contact_frame[++idx])) * sensor_orientation_to_degrees_factor;
-        //Convert major_axis to mm (assumes that x_to_mm and y_to_mm are the same)
-        c[i].major_axis_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
-        //Convert minor_axis to mm (assumes that x_to_mm and y_to_mm are the same)
-        c[i].minor_axis_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) * sensor_x_to_mm_factor;
-        ++idx; //peak_x
-        ++idx; //peak_y
         c[i].id = (((int)contact_frame[++idx]) & 0xff);
         c[i].type = (((int)contact_frame[++idx]) & 0xff);
+        c[i].x_pos_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) / sensor_mm_value_scale;
+        //Convert y_pos to y_pos_mm
+        c[i].y_pos_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) / sensor_mm_value_scale;
+        //Convert dx to dx_mm
+        c[i].total_force = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) / sensor_gram_value_scale;
+        c[i].area_mm_sq = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx]));
+        //Convert x_pos to x_pos_mm
+        c[i].orientation_degrees = ((float)_convertBytesToS16(contact_frame[++idx], contact_frame[++idx])) / sensor_degree_value_scale;
+        //Convert major_axis to mm (assumes that x_to_mm and y_to_mm are the same)
+        c[i].major_axis_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) / sensor_mm_value_scale;
+        //Convert minor_axis to mm (assumes that x_to_mm and y_to_mm are the same)
+        c[i].minor_axis_mm = ((float)_convertBytesTo16(contact_frame[++idx], contact_frame[++idx])) / sensor_mm_value_scale;
       }
       retval = c;
     }  

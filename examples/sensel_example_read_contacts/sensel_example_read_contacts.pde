@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright 2015 Sensel, Inc.
+ * Copyright 2017 Sensel, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ void draw()
    
   for(int i = 0; i < c.length; i++)
   {
-    int force = c[i].total_force;
+    float force = c[i].total_force;
     float area = c[i].area_mm_sq;
     float sensor_x_mm = c[i].x_pos_mm;
     float sensor_y_mm = c[i].y_pos_mm;
